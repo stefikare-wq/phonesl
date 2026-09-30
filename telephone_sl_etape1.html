@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Téléphone – étape 1</title>
+<style>
+:root{
+  --fond:#14202a; --panneau:#1d2d39; --trait:#324656;
+  --ivoire:#efe8d8; --gris:#9fb0bb; --laiton:#c9a24b; --rouge:#d9503a; --led:#7bd88f;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--fond);color:var(--ivoire);
+  font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:460px;margin:0 auto;padding:24px 18px 48px}
+h1{font:italic 400 2.6rem/1 Georgia,"Times New Roman",serif;margin:8px 0 18px;letter-spacing:.01em}
+.afficheur{background:#0c141a;border:1px solid var(--trait);border-radius:6px;padding:14px 16px;
+  display:flex;justify-content:space-between;align-items:baseline;margin-bottom:18px}
+#etat{color:var(--gris);font-size:.95rem}
+#etat.ok{color:var(--led)} #etat.err{color:var(--rouge)}
+#chrono{font:1.9rem/1 "Courier New",monospace;color:var(--laiton);letter-spacing:.06em}
+.onglets{display:flex;border-bottom:1px solid var(--trait);margin-bottom:16px}
+.onglets button{flex:1;background:none;border:0;color:var(--gris);padding:12px 0;font:inherit;cursor:pointer;
+  border-bottom:3px solid transparent;margin-bottom:-1px}
+.onglets button.on{color:var(--ivoire);border-bottom-color:var(--laiton)}
+p{margin:14px 0 6px;color:var(--gris)}
+textarea{width:100%;height:84px;background:var(--panneau);color:var(--ivoire);border:1px solid var(--trait);
+  border-radius:4px;padding:10px;font:.78rem/1.3 "Courier New",monospace;resize:vertical}
+button.act{background:var(--laiton);color:#1a1405;border:0;border-radius:4px;padding:13px 18px;
+  font:600 1rem system-ui,sans-serif;cursor:pointer;margin-top:8px}
+button.sec{background:none;color:var(--ivoire);border:1px solid var(--trait);border-radius:4px;
+  padding:12px 16px;font:inherit;cursor:pointer;margin-top:8px}
+button.rouge{background:var(--rouge);color:#fff;border:0;border-radius:4px;padding:14px 22px;
+  font:600 1rem system-ui,sans-serif;cursor:pointer}
+button:focus-visible,textarea:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--ivoire);outline-offset:2px}
+.rang{display:flex;gap:10px;flex-wrap:wrap}
+.vu{margin:16px 0}
+.vu span{display:block;color:var(--gris);font-size:.9rem;margin-bottom:4px}
+.vu div{height:10px;background:#0c141a;border:1px solid var(--trait);border-radius:2px;overflow:hidden}
+.vu i{display:block;height:100%;width:0;background:var(--led);transition:width .06s linear}
+input[type=range]{width:100%;height:34px;accent-color:var(--laiton)}
+details{margin-top:26px;border-top:1px solid var(--trait);padding-top:12px;color:var(--gris)}
+summary{cursor:pointer}
+label{display:block;margin:8px 0}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <h1>Allô ?</h1>
+
+  <div class="afficheur" aria-live="polite">
+    <span id="etat">Libre</span>
+    <span id="chrono">00:00</span>
+  </div>
+
+  <section id="accueil">
+    <div class="onglets" role="tablist">
+      <button class="on" data-t="appel" role="tab">Appeler</button>
+      <button data-t="reponse" role="tab">Répondre</button>
+    </div>
+
+    <div id="t-appel">
+      <p>Crée l'appel, puis envoie le code à ton correspondant.</p>
+      <button class="act" id="creer">Créer l'appel</button>
+      <p>Code d'appel</p>
+      <textarea id="offreOut" readonly></textarea>
+      <button class="sec" data-copie="offreOut">Copier le code</button>
+      <p>Colle ici le code de réponse qu'il te renvoie.</p>
+      <textarea id="reponseIn"></textarea>
+      <button class="act" id="connecter">Connecter</button>
+    </div>
+
+    <div id="t-reponse" hidden>
+      <p>Colle ici le code d'appel reçu.</p>
+      <textarea id="offreIn"></textarea>
+      <button class="act" id="repondre">Répondre</button>
+      <p>Code de réponse à renvoyer</p>
+      <textarea id="reponseOut" readonly></textarea>
+      <button class="sec" data-copie="reponseOut">Copier le code</button>
+    </div>
+  </section>
+
+  <section id="enCommunication" hidden>
+    <div class="vu"><span>Ton micro</span><div><i id="vuMoi"></i></div></div>
+    <div class="vu"><span>Ton correspondant</span><div><i id="vuLui"></i></div></div>
+    <label>Volume de l'écoute
+      <input type="range" id="vol" min="0" max="1" step="0.01" value="1">
+    </label>
+    <div class="rang">
+      <button class="sec" id="muet">Couper le micro</button>
+      <button class="rouge" id="raccrocher">Raccrocher</button>
+    </div>
+  </section>
+
+  <details>
+    <summary>Réglages du micro</summary>
+    <label><input type="checkbox" id="ec" checked> Annulation d'écho</label>
+    <label><input type="checkbox" id="ns" checked> Réduction du bruit</label>
+    <label><input type="checkbox" id="agc" checked> Gain automatique</label>
+    <p>À modifier avant de créer l'appel. Un casque évite que Second Life ne repasse dans le micro.</p>
+  </details>
+
+  <audio id="distant" autoplay></audio>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const CFG = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+let pc = null, micro = null, ctx = null, anMoi = null, anLui = null, t0 = 0, minuteur = null, raf = 0;
+
+const enc = d => btoa(unescape(encodeURIComponent(JSON.stringify(d))));
+const dec = s => JSON.parse(decodeURIComponent(escape(atob(s.trim()))));
+
+function etat(txt, cls = "") { const e = $("etat"); e.textContent = txt; e.className = cls; }
+
+async function ouvrirMicro() {
+  if (micro) return;
+  micro = await navigator.mediaDevices.getUserMedia({ audio: {
+    echoCancellation: $("ec").checked,
+    noiseSuppression: $("ns").checked,
+    autoGainControl: $("agc").checked
+  }});
+}
+
+function nouvelleConnexion() {
+  pc = new RTCPeerConnection(CFG);
+  micro.getTracks().forEach(t => pc.addTrack(t, micro));
+  pc.ontrack = e => { $("distant").srcObject = e.streams[0]; brancherVu(e.streams[0]); };
+  pc.onconnectionstatechange = () => {
+    const s = pc.connectionState;
+    if (s === "connected") demarrer();
+    else if (s === "failed") finir("Connexion impossible : un relais TURN sera nécessaire entre ces deux réseaux.", true);
+    else if (s === "disconnected" || s === "closed") finir("Appel terminé");
+  };
+}
+
+function iceTermine() {
+  return new Promise(ok => {
+    if (pc.iceGatheringState === "complete") return ok();
+    pc.addEventListener("icegatheringstatechange", () => { if (pc.iceGatheringState === "complete") ok(); });
+    setTimeout(ok, 4000);
+  });
+}
+
+async function securise(fn) {
+  try { await fn(); }
+  catch (e) {
+    const refus = e && (e.name === "NotAllowedError" || e.name === "NotFoundError");
+    etat(refus ? "Micro refusé ou introuvable : autorise-le dans le navigateur (page en https ou localhost)." : "Erreur : " + (e.message || e), "err");
+  }
+}
+
+$("creer").onclick = () => securise(async () => {
+  etat("Préparation…");
+  await ouvrirMicro(); nouvelleConnexion();
+  await pc.setLocalDescription(await pc.createOffer());
+  await iceTermine();
+  $("offreOut").value = enc(pc.localDescription);
+  etat("Code prêt : envoie-le, puis colle la réponse.", "ok");
+});
+
+$("connecter").onclick = () => securise(async () => {
+  if (!pc) throw new Error("crée d'abord l'appel");
+  await pc.setRemoteDescription(dec($("reponseIn").value));
+  etat("Connexion en cours…");
+});
+
+$("repondre").onclick = () => securise(async () => {
+  etat("Préparation…");
+  await ouvrirMicro(); nouvelleConnexion();
+  await pc.setRemoteDescription(dec($("offreIn").value));
+  await pc.setLocalDescription(await pc.createAnswer());
+  await iceTermine();
+  $("reponseOut").value = enc(pc.localDescription);
+  etat("Réponse prête : renvoie ce code à ton correspondant.", "ok");
+});
+
+function niveau(an) {
+  const b = new Uint8Array(an.fftSize); an.getByteTimeDomainData(b);
+  let m = 0; for (const v of b) m = Math.max(m, Math.abs(v - 128));
+  return Math.min(100, m / 64 * 100);
+}
+function creerAn(stream) {
+  ctx = ctx || new AudioContext();
+  const an = ctx.createAnalyser(); an.fftSize = 512;
+  ctx.createMediaStreamSource(stream).connect(an);
+  return an;
+}
+function brancherVu(stream) { anLui = creerAn(stream); }
+function boucleVu() {
+  if (anMoi) $("vuMoi").style.width = niveau(anMoi) + "%";
+  if (anLui) $("vuLui").style.width = niveau(anLui) + "%";
+  raf = requestAnimationFrame(boucleVu);
+}
+
+function demarrer() {
+  if (minuteur) return;
+  $("accueil").hidden = true; $("enCommunication").hidden = false;
+  etat("En communication", "ok");
+  anMoi = creerAn(micro);
+  t0 = Date.now();
+  minuteur = setInterval(() => {
+    const s = Math.floor((Date.now() - t0) / 1000);
+    $("chrono").textContent = String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+  }, 500);
+  boucleVu();
+}
+
+function finir(msg, erreur) {
+  if (!pc && !micro) return;
+  clearInterval(minuteur); minuteur = null; cancelAnimationFrame(raf);
+  if (pc) { pc.onconnectionstatechange = null; pc.close(); pc = null; }
+  if (micro) { micro.getTracks().forEach(t => t.stop()); micro = null; }
+  anMoi = anLui = null; $("distant").srcObject = null;
+  $("vuMoi").style.width = $("vuLui").style.width = "0";
+  $("chrono").textContent = "00:00";
+  $("enCommunication").hidden = true; $("accueil").hidden = false;
+  $("offreOut").value = $("reponseIn").value = $("offreIn").value = $("reponseOut").value = "";
+  $("muet").textContent = "Couper le micro";
+  etat(msg, erreur ? "err" : "");
+}
+
+$("raccrocher").onclick = () => finir("Appel terminé");
+$("muet").onclick = () => {
+  const t = micro.getAudioTracks()[0]; t.enabled = !t.enabled;
+  $("muet").textContent = t.enabled ? "Couper le micro" : "Réactiver le micro";
+};
+$("vol").oninput = e => { $("distant").volume = +e.target.value; };
+
+document.querySelectorAll(".onglets button").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".onglets button").forEach(x => x.classList.toggle("on", x === b));
+  $("t-appel").hidden = b.dataset.t !== "appel";
+  $("t-reponse").hidden = b.dataset.t !== "reponse";
+});
+document.querySelectorAll("[data-copie]").forEach(b => b.onclick = async () => {
+  const t = $(b.dataset.copie); if (!t.value) return;
+  try { await navigator.clipboard.writeText(t.value); }
+  catch { t.select(); document.execCommand("copy"); }
+  const a = b.textContent; b.textContent = "Copié"; setTimeout(() => b.textContent = a, 1200);
+});
+</script>
+</body>
+</html>
