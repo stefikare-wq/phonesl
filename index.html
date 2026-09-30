@@ -109,19 +109,26 @@ const $ = id => document.getElementById(id);
 const CFG = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 let pc = null, micro = null, ctx = null, anMoi = null, anLui = null, t0 = 0, minuteur = null, raf = 0;
 
-// Code = données compressées en base64, suivies de "-" et de leur longueur (pour repérer un code coupé)
+// Code = "v2." + données compressées en base64 + "." + longueur (pour repérer un code coupé ou d'une autre version)
 async function enc(d) {
   const flux = new Blob([JSON.stringify(d)]).stream().pipeThrough(new CompressionStream("deflate-raw"));
   const oct = new Uint8Array(await new Response(flux).arrayBuffer());
   let b = ""; oct.forEach(x => b += String.fromCharCode(x));
-  const data = btoa(b);
-  return data + "-" + data.length.toString(36);
+  const data = btoa(b).replace(/=+$/, "");
+  return "v2." + data + "." + data.length.toString(36);
 }
 async function dec(code) {
-  const [data, lg] = code.replace(/\s+/g, "").split("-");
-  if (!data || data.length.toString(36) !== lg)
+  code = code.replace(/\s+/g, "");
+  if (!code.startsWith("v2."))
+    throw new Error("ce code vient d'une ancienne version de la page : recharge la page des deux côtés (Ctrl+F5) et génère un nouveau code");
+  const [, data0, lg] = code.split(".");
+  if (!data0 || data0.length.toString(36) !== lg)
     throw new Error("code incomplet ou modifié : recopie-le en entier avec le bouton Copier");
-  const oct = Uint8Array.from(atob(data), c => c.charCodeAt(0));
+  let data = data0.replace(/-/g, "+").replace(/_/g, "/");
+  while (data.length % 4) data += "=";
+  let oct;
+  try { oct = Uint8Array.from(atob(data), c => c.charCodeAt(0)); }
+  catch { throw new Error("code abîmé pendant le copier-coller : recopie-le avec le bouton Copier"); }
   const flux = new Blob([oct]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
   return JSON.parse(await new Response(flux).text());
 }
