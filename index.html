@@ -109,8 +109,22 @@ const $ = id => document.getElementById(id);
 const CFG = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 let pc = null, micro = null, ctx = null, anMoi = null, anLui = null, t0 = 0, minuteur = null, raf = 0;
 
-const enc = d => btoa(unescape(encodeURIComponent(JSON.stringify(d))));
-const dec = s => JSON.parse(decodeURIComponent(escape(atob(s.trim()))));
+// Code = données compressées en base64, suivies de "-" et de leur longueur (pour repérer un code coupé)
+async function enc(d) {
+  const flux = new Blob([JSON.stringify(d)]).stream().pipeThrough(new CompressionStream("deflate-raw"));
+  const oct = new Uint8Array(await new Response(flux).arrayBuffer());
+  let b = ""; oct.forEach(x => b += String.fromCharCode(x));
+  const data = btoa(b);
+  return data + "-" + data.length.toString(36);
+}
+async function dec(code) {
+  const [data, lg] = code.replace(/\s+/g, "").split("-");
+  if (!data || data.length.toString(36) !== lg)
+    throw new Error("code incomplet ou modifié : recopie-le en entier avec le bouton Copier");
+  const oct = Uint8Array.from(atob(data), c => c.charCodeAt(0));
+  const flux = new Blob([oct]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  return JSON.parse(await new Response(flux).text());
+}
 
 function etat(txt, cls = "") { const e = $("etat"); e.textContent = txt; e.className = cls; }
 
@@ -156,23 +170,23 @@ $("creer").onclick = () => securise(async () => {
   await ouvrirMicro(); nouvelleConnexion();
   await pc.setLocalDescription(await pc.createOffer());
   await iceTermine();
-  $("offreOut").value = enc(pc.localDescription);
+  $("offreOut").value = await enc(pc.localDescription);
   etat("Code prêt : envoie-le, puis colle la réponse.", "ok");
 });
 
 $("connecter").onclick = () => securise(async () => {
   if (!pc) throw new Error("crée d'abord l'appel");
-  await pc.setRemoteDescription(dec($("reponseIn").value));
+  await pc.setRemoteDescription(await dec($("reponseIn").value));
   etat("Connexion en cours…");
 });
 
 $("repondre").onclick = () => securise(async () => {
   etat("Préparation…");
   await ouvrirMicro(); nouvelleConnexion();
-  await pc.setRemoteDescription(dec($("offreIn").value));
+  await pc.setRemoteDescription(await dec($("offreIn").value));
   await pc.setLocalDescription(await pc.createAnswer());
   await iceTermine();
-  $("reponseOut").value = enc(pc.localDescription);
+  $("reponseOut").value = await enc(pc.localDescription);
   etat("Réponse prête : renvoie ce code à ton correspondant.", "ok");
 });
 
